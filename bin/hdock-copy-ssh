@@ -1,0 +1,50 @@
+#!/bin/sh -e
+#h: Usage: $0 [-u USER] CONTAINER
+#h:
+#h: Install SSH keys into the docker.
+. hdock-install
+. hdock-ls
+hdock_copy_ssh() {
+    ## Parse command line arguments.
+    local OPTIND optopt= ops= args=
+    while getopts "u:" optopt;do # OPTARG
+        local ops="${ops}${optopt}"
+        case $optopt in
+            u)  local args="${args} -u ${OPTARG}";;
+            \?) return 1;;
+        esac
+    done
+    shift $(( $OPTIND - 1 ))
+    ## Get container.
+    local container="$1"
+    if test ! -n "${container}";then
+        hdock_ls | sed '1d;s|.* \([^ ]*[^ ]*\)|\1|'
+        return 1
+    fi
+    shift
+    ## Check .ssh exists.
+    if test ! -d "${HOME}/.ssh";then
+        echo "hdock-copy-ssh: error: Directory ~/.ssh does not exist." >&2
+        return 1
+    fi
+    ## Copy.
+    sh -ec "
+    cd ~
+    tar cf - .ssh
+    " | docker exec -i ${args} "${container}" sh -c "
+    cd ~
+    echo \"Extracting to \`pwd\` ...\"
+    tar vxf - --no-same-owner
+    chmod -R go-rwx .ssh
+    "
+    
+}
+if test @"`basename "$0"`" = @"hdock-copy-ssh";then
+    if test ! @"$1" = "-h";then
+        hdock_copy_ssh "$@"
+    else
+        sed -n 's/^ *#h: \{0,1\}//p' "$0" | sed "s|\\\$0|`basename $0`|g"
+        echo ""
+        sed -n 's/^ *#l: \{0,2\}//p' "$0"
+    fi
+fi

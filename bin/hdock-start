@@ -1,0 +1,6 @@
+docker_start() {
+    local name=
+    for name in "$@";do
+	docker start "${name}" > /dev/null
+    done
+}

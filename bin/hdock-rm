@@ -1,0 +1,16 @@
+#!/bin/sh -e
+. hdock-install
+hdock_rm() {
+    local name=
+    for name in "$@";do
+	docker stop "${name}" 2>/dev/null || true
+	docker rm   "${name}" 2>/dev/null || true
+    done
+}
+if test @"`basename "$0"`" = @"hdock-rm";then
+    if test -n "$1";then
+        hdock_rm "$@"
+    else
+        echo "Usage: hdock-rm CONTAINERS..."
+    fi
+fi

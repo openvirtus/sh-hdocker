@@ -1,0 +1,8 @@
+#!/bin/sh -e
+. hdock-install
+hdock_ls() {
+    docker container ls -a
+}
+if test @"`basename "$0"`" = @"hdock-ls";then
+    hdock_ls "$@"
+fi

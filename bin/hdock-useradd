@@ -1,0 +1,26 @@
+#!/bin/sh -e
+#h: Usage: $0 CONTAINER [USER]
+#h:
+#h: Add user into the container.
+. hdock-sh
+hdock_useradd() {
+    local container="$1" user="${2:-${USER}}" uid="`id -u ${USER}`"
+    hdock_sh "${container}" "
+    useradd --non-unique --system --uid ${uid} ${user} || true
+    usermod -G wheel ${user}        || true
+    if test -f /etc/sudoers;then
+        sed -i '/^%wheel  */d' /etc/sudoers
+        echo '%wheel	ALL=(ALL)	NOPASSWD: ALL' >> /etc/sudoers
+    fi
+    "
+}
+if test @"`basename "$0"`" = @"hdock-useradd";then
+    if test -n "$1";then
+        hdock_useradd "$@"
+    else
+        sed -n 's/^ *#h: \{0,1\}//p' "$0" | sed "s|\\\$0|`basename $0`|g"
+        echo ""
+        sed -n 's/^ *#l: \{0,2\}//p' "$0"
+    fi
+fi
+

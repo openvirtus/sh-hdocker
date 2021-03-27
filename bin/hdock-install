@@ -1,0 +1,130 @@
+#!/bin/sh -e
+#h: Usage: $0 -vi
+#h:
+#h: This script helps installing the official docker.
+#h:
+#h: -v : Show configuration.
+#h: -i : Install docker.
+#h: -r : Remove /var/lib/docker/*.
+#h: 
+hdock_install() {
+    case "${1}" in
+        -*v*) hdock_install_show_variables
+              ;;
+    esac
+    case "${1}" in
+        -*i*) hdock_install_extract
+              hdock_install_wrappers
+              hdock_install_service;;
+    esac
+    case "${1}" in
+        -*r*) docker system prune -a -f;;
+    esac
+}
+hdock_install_calc_variables() {
+    HDOCK_URL="${HDOCK_URL:-https://download.docker.com/linux/static/stable/x86_64/docker-19.03.9.tgz}"
+    HDOCK_DIRECTORY="${HDOCK_DIRECTORY:-/opt/docker19k2}"
+    HDOCK_CLIENT="/usr/local/bin/docker"
+    HDOCK_SERVER="/usr/local/bin/dockerd"
+    HDOCK_SERVICE="docker-official-2"
+}
+hdock_install_show_variables() {
+    printf '%-20s : %s\n' HDOCK_URL       "${HDOCK_URL}"
+    printf '%-20s : %s\n' HDOCK_DIRECTORY "${HDOCK_DIRECTORY}"
+    printf '%-20s : %s\n' HDOCK_CLIENT    "${HDOCK_CLIENT}"
+    printf '%-20s : %s\n' HDOCK_SERVER    "${HDOCK_SERVER}"
+    printf '%-20s : %s\n' HDOCK_SERVICE   "${HDOCK_SERVICE}"
+}
+## -----------------------------------------------------------------------------------------------------
+hdock_install_extract() {
+    local tar="/tmp/`basename "${HDOCK_URL}"`"
+    if test ! -f "${HDOCK_DIRECTORY}/bin/docker";then
+        if test ! -f "${tar}";then
+            echo "[+] Downloading from ${HDOCK_URL} ..." >&2
+            wget -O "${tar}.tmp" "${HDOCK_URL}"
+            mv "${tar}.tmp" "${tar}"
+        fi
+        echo "[+] Extracting to ${HDOCK_DIRECTORY}"
+        sudo mkdir -p "${HDOCK_DIRECTORY}/bin" "/tmp/docker.new"
+        sudo tar xf "${tar}" -C "/tmp/docker.new"
+        sudo mv /tmp/docker.new/docker/* "${HDOCK_DIRECTORY}/bin"
+        sudo rmdir /tmp/docker.new/docker
+        sudo rmdir /tmp/docker.new
+    fi
+}
+hdock_install_wrappers() {
+    echo "[+] Creating ${HDOCK_CLIENT} ..."
+    sudo sh -c "cat > ${HDOCK_CLIENT}.1 && chmod +x ${HDOCK_CLIENT}.1" <<EOF
+#!/bin/sh
+export PATH="${HDOCK_DIRECTORY}/bin:\${PATH}"
+sudo chmod a+rw /var/run/docker.sock
+export DOCKER_BUILDKIT=1
+if test -f ~/.ssh/id_rsa;then
+    ssh-add ~/.ssh/id_rsa >/dev/null 2>&1
+fi
+exec '${HDOCK_DIRECTORY}/bin/docker' "\$@"
+EOF
+    sudo sh -c "cat > ${HDOCK_CLIENT} && chmod +x ${HDOCK_CLIENT}" <<EOF
+#!/bin/sh
+if which ssh-agent >/dev/null 2>&1;then 
+    exec ssh-agent ${HDOCK_CLIENT}.1 "\$@"
+else
+    exec ${HDOCK_CLIENT}.1 "\$@"
+fi
+EOF
+    echo "[+] Creating ${HDOCK_SERVER} ..."
+    sudo sh -c "cat > ${HDOCK_SERVER} && chmod +x ${HDOCK_SERVER}" <<EOF
+#!/bin/sh
+export PATH="${HDOCK_DIRECTORY}/bin:\${PATH}"
+export DOCKER_BUILDKIT=1
+exec '${HDOCK_DIRECTORY}/bin/dockerd' "\$@"
+EOF
+}
+hdock_install_service() {
+    if test -d /etc/systemd/system;then
+        ## Create service.
+        echo "[+] Creating /etc/systemd/system/${HDOCK_SERVICE}.service ..."
+        sudo mkdir -p /etc/systemd/system
+        sudo sh -c "cat > /etc/systemd/system/${HDOCK_SERVICE}.service" <<EOF
+[Unit]
+Description=Docker daemon
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=${HDOCK_SERVER}
+Restart=on-failure
+RestartSec=42s
+
+[Install]
+WantedBy=multi-user.target
+EOF
+        ## Enable service.
+        hdock_vrun sudo systemctl daemon-reload
+        hdock_vrun sudo systemctl restart "${HDOCK_SERVICE}"
+        sleep 2
+        hdock_vrun sudo systemctl status  "${HDOCK_SERVICE}" | cat
+        hdock_vrun sudo systemctl enable  "${HDOCK_SERVICE}"
+        sudo systemctl disable docker 2>/dev/null || true
+    fi
+}
+hdock_vrun() {
+    echo "[+] $*"
+    "$@"
+}
+docker() {
+    "${HDOCK_CLIENT}" "$@"
+}
+
+
+## -----------------------------------------------------------------------------------------------------
+hdock_install_calc_variables
+if test @"`basename "$0"`" = @"hdock-install";then
+    if test -n "$1";then
+        hdock_install "$@"
+    else
+        sed -n 's/^ *#h: \{0,1\}//p' "$0" | sed "s|\\\$0|`basename $0`|g"
+        echo ""
+        sed -n 's/^ *#l: \{0,2\}//p' "$0"
+    fi
+fi

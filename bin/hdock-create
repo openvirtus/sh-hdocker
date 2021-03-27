@@ -1,0 +1,70 @@
+#!/bin/sh -e
+#h: Usage: $0 [OPTS...] IMAGE CONTAINER [DOCKER-CREATE-OPTIONS...]
+#h:
+#h: Create a container with the following characteristics.
+#h:
+#h: 1.- The used network is 'host'.
+#h: 2.- H:/dev/urandom <-> D:/dev/random
+#h: 3.- SYS_PTRACE capacity.
+#h: 4.- Unconfined.
+#h: 5.- It will execute 'sleep infinity'.
+#h:
+. hdock-install
+. hdock-image-ls
+. hdock-ls
+hdock_create() {
+    ## Parse command line.
+    local OPTIND optopt= ops=
+    while getopts "" optopt;do # OPTARG
+        local ops="${ops}${optopt}"
+        case $optopt in
+            \?) return 1;;
+        esac
+    done
+    shift $(( $OPTIND - 1 ))
+    ## Require a binary name.
+    local image="$1"
+    if test ! -n "${image}";then
+        echo "hdock-create: error: Please specify an image." >&2
+        echo "" >&2
+        hdock_image_ls
+        return 1
+    fi
+    shift
+    ## Require a container name.
+    local container="$1"
+    if test ! -n "${container}";then
+        echo "hdock-create: error: Please specify a container name." >&2
+        echo "" >&2
+        hdock_ls
+        return 1
+    fi
+    shift
+    ## Run.
+    hdock_create_vrun                     \
+        docker create                     \
+        --name "${container}"             \
+        --network host                    \
+        -v /dev/urandom:/dev/random       \
+        --cap-add=SYS_PTRACE              \
+        --security-opt seccomp=unconfined \
+        -v /:/mnt/host                    \
+        -v /tmp/remote:/tmp/remote        \
+        "$@"                              \
+        "${image}"                        \
+        sleep infinity
+}
+hdock_create_vrun() {
+    echo "Running: $*" >&2
+    "$@"
+}
+if test @"`basename "$0"`" = @"hdock-create";then
+    if test -n "$1";then
+        hdock_create "$@"
+    else
+        sed -n 's/^ *#h: \{0,1\}//p' "$0" | sed "s|\\\$0|`basename $0`|g"
+        echo ""
+        sed -n 's/^ *#l: \{0,2\}//p' "$0"
+    fi
+fi
+

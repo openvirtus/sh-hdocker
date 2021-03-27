@@ -1,0 +1,12 @@
+#!/bin/sh -e
+. hdock-install
+hdock_image_ls() {
+    echo ""
+    echo "#> docker image prune : Remove unused images."
+    echo "#> docker image rm ID : Remove image."
+    echo ""
+    docker image ls
+}
+if test @"`basename "$0"`" = @"hdock-image-ls";then
+    hdock_image_ls "$@"
+fi

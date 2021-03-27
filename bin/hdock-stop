@@ -1,0 +1,8 @@
+#!/bin/sh -e
+. hdock-install
+hdock_stop() { # TDO
+    local name=
+    for name in "$@";do
+	docker stop "${name}" 2>/dev/null || true
+    done
+}

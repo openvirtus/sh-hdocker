@@ -1,0 +1,113 @@
+#!/bin/sh -e
+#h: Usage: $0 [OPT=VAL ...] [CONTAINER [COMMAND...]]
+#h:
+#h: -v         : Show variables.
+#h: -q         : Execute without moving to current directory.
+#h: -u USER    : Execute as user.
+#h: -s SHELL   : Change default shell.
+#h: -V         : Verbose output.
+#h: 
+. hdock-install
+. hdock-ls
+hdock_sh() {
+    ## Parse command line arguments.
+    local OPTIND optopt= ops= do_chdir=y user= container= args="-it" psh=""
+    while getopts "vqu:s:V" optopt;do # OPTARG
+        local ops="${ops}${optopt}"
+        case $optopt in
+            q)  local do_chdir=n                  ;;
+            u)  local user="${OPTARG}"            ;;
+            v)  hdock_sh_show_variables; return 0 ;;
+            V)  local HDOCK_VERBOSE=y             ;;
+            \?) return 1;;
+        esac
+    done
+    shift $(( $OPTIND - 1 ))
+    ## Set environment variables.
+    while true;do
+        case "${1}" in
+            *=*) local psh="${ps1}export '${1}'
+"
+                 shift;;
+            *)   break;;
+        esac
+    done
+    
+    
+    ## Get container.
+    if test ! -n "$1";then
+        hdock_ls | sed '1d;s|.* \([^ ]*[^ ]*\)|\1|'
+        return 1
+    else
+        local container="$1"
+        shift
+    fi
+    ## Start container.
+    hdock_sh_vrun docker start "${container}" > /dev/null
+    ## Check whether changing directory is posible.
+    if test ! "${do_chdir}" = y;then
+        true
+    elif docker exec "${container}" test -d /mnt/host/`pwd`;then
+        local args="${args} -w /mnt/host/`pwd`"
+    fi
+    ## Add user.
+    if test -n "${user}";then
+        local args="${args} -u ${user}"
+    fi
+    ## Forge posible ps1.
+    local ps1='\033[1;33m[DOCKER:'"${container}"' USER:\u PWD:\w]\033[0m\n$ '
+    ## If hremote exists, get it's code.
+    if which hremote >/dev/null 2>&1;then
+        HREMOTE_DIRECTORY=/mnt/host
+        . hremote
+        local psh="${psh}
+`hremote_source_file`"
+    fi
+    ## Forge command and execute.
+    if test -n "$1";then
+        local psh="
+cmd=1
+${psh}
+${*}"
+        hdock_sh_vrun docker exec ${args} "${container}" "${HDOCK_SHELL}" -ec "${psh}"
+    else
+        local psh="${psh}
+if test /bin/bash = \"${HDOCK_SHELL}\";then
+    export PS1='${ps1}'
+    exec /bin/bash --noprofile --norc
+else
+    exec \"${HDOCK_SHELL}\"
+fi"
+        docker exec ${args} "${container}" "${HDOCK_SHELL}" -c "${psh}"
+    fi
+    
+    
+}
+hdock_sh_show_variables() {
+    printf '%-20s : %s\n' HDOCK_SHELL "${HDOCK_SHELL}"
+}
+hdock_sh_calc_variables() {
+    HDOCK_SHELL="${HDOCK_SHELL:-/bin/bash}"
+}
+hdock_sh_vrun() {
+    if test -n "${HDOCK_VERBOSE}";then
+        echo "Running: ${*}" >&2
+    fi
+    "$@"
+}
+## ------------------------------------------------------------------------
+
+
+
+
+## ------------------------------------------------------------------------
+hdock_sh_calc_variables
+if test @"`basename "$0"`" = @"hdock-sh";then
+    if test ! @"$1" = @"-h";then
+        hdock_sh "$@"
+    else
+        sed -n 's/^ *#h: \{0,1\}//p' "$0" | sed "s|\\\$0|`basename $0`|g"
+        echo ""
+        sed -n 's/^ *#l: \{0,2\}//p' "$0"
+    fi
+fi
