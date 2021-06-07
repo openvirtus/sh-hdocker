@@ -1,8 +1,0 @@
-docker_copy_auth() {
-    sh -ec 'cd ~ && cat .ssh/authorized_keys .ssh/id_rsa.pub' \
-       | docker exec -i "${1}" sh -c "
-       mkdir -p ~/.ssh
-       cat > ~/.ssh/authorized_keys
-       chmod go-rwx ~/.ssh/authorized_keys
-       echo '~/.ssh/authorized_keys'"
-}
