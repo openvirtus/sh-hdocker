@@ -1,3 +1,21 @@
+    Usage: hremote [OPTS...] [USER@HOST]
+    
+    This script helps mounting the local host's filesystem in a server. This
+    enables the system administrator to write scripts easily. [Support hcfg]
+    
+    (i) Maybe you want to uncomment `user_allow_other` in /etc/fuse.conf in
+        the server.
+        > yum install epel-release --enablerepo=extras
+        > yum install fuse-sshfs --enablerepo=extras --enablerepo=base
+    (i) Install `vde2` to get `dpipe` in the local machine.
+        https://github.com/virtualsquare/vde-2.git
+    
+    -v : Show environment variable.
+    
+    -m : Mount host to remote.
+    -u : Umount host in the remote.
+    
+    -s : Open shell in the server.
 ## HDOCK-INSTALL
 
     Usage: hdock-install -vi
@@ -38,6 +56,12 @@ List images.
     
     Install SSH keys into the docker.
 
+## HDOCK-USERADD
+
+    Usage: hdock-useradd CONTAINER [USER]
+    
+    Add user into the container.
+
 ## HDOCK-CREATE
 
     Usage: hdock-create [OPTS...] IMAGE CONTAINER [DOCKER-CREATE-OPTIONS...]
@@ -49,12 +73,6 @@ List images.
     3.- SYS_PTRACE capacity.
     4.- Unconfined.
     5.- It will execute 'sleep infinity'.
-
-## HDOCK-USERADD
-
-    Usage: hdock-useradd CONTAINER [USER]
-    
-    Add user into the container.
 
 ## DONATIONS
 <ul>

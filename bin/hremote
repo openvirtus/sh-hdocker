@@ -1,0 +1,173 @@
+#!/bin/sh -e
+#L:
+#L:  This software is free to use and modify, but not free to maintain.
+#L:
+#l:  Donate bitcoin: 1C1ZzDje7vHhF23mxqfcACE8QD4nqxywiV
+#l:  Copyright (c) 2018 Openvirtus.com, http://openvirtus.com
+#L:
+#L:  Permission is hereby granted, free of charge, to any person obtaining
+#L:  a copy of this software and associated documentation files (the
+#L:  "Software"), to deal in the Software without restriction, including
+#L:  without limitation the rights to use, copy, modify, merge, publish,
+#L:  distribute, sublicense, and/or sell copies of the Software, and to
+#L:  permit persons to whom the Software is furnished to do so, subject to
+#L:  the following conditions:
+#L:
+#L:  The above copyright notice and this permission notice shall be
+#L:  included in all copies or substantial portions of the Software.
+#L:
+#L:  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+#L:  EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+#L:  MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+#L:  NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+#L:  LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+#L:  OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+#L:  WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+#L:
+#h: Usage: $0 [OPTS...] [USER@HOST]
+#h:
+#h: This script helps mounting the local host's filesystem in a server. This
+#h: enables the system administrator to write scripts easily. [Support hcfg]
+#h:
+#h: (i) Maybe you want to uncomment `user_allow_other` in /etc/fuse.conf in
+#h:     the server.
+#h:     > yum install epel-release --enablerepo=extras
+#h:     > yum install fuse-sshfs --enablerepo=extras --enablerepo=base
+#h: (i) Install `vde2` to get `dpipe` in the local machine.
+#h:     https://github.com/virtualsquare/vde-2.git
+#h:
+#h: -v : Show environment variable.
+#h:
+#h: -m : Mount host to remote.
+#h: -u : Umount host in the remote.
+#h:
+#h: -s : Open shell in the server.
+#::
+#a: [ADMIN] Mount scripts in your local machine into the server using sshfs.
+. hutil
+. hcfg
+hremote() {
+    ## Parse command line arguments.
+    local OPTIND optopt= ops=
+    while getopts "vmus" optopt;do # OPTARG
+        local ops="${ops}${optopt}"
+        case $optopt in
+            \?) return 1;;
+        esac
+    done
+    shift $(( $OPTIND - 1 ))
+    ## Set hostname.
+    if test -n "$1";then HREMOTE_SERVER="$1"; shift; fi
+    ## Show honored environment variables.
+    case "${ops}" in *v*) hremote_show_variables ;; esac
+    case "${ops}" in *m*) hremote_mount          ;; esac
+    case "${ops}" in *s*) hremote_shell "$@"     ;; esac
+    case "${ops}" in *u*) hremote_umount         ;; esac
+}
+hremote_show_variables() {
+    echo "HREMOTE_DIRECTORY : ${HREMOTE_DIRECTORY}"
+    echo "HREMOTE_SERVER    : ${HREMOTE_SERVER}"
+}
+hremote_calc_variables() {
+    HREMOTE_DIRECTORY="${HREMOTE_DIRECTORY:-/tmp/remote/`hostname`}"
+    HREMOTE_SERVER="${HREMOTE_SERVER:-${USER}@localhost}"
+}
+## ---------------------------------------------------------------------------
+hremote_umount() {
+    ssh "${HREMOTE_SERVER}" "
+    echo 'hremote: Unmounting ${HREMOTE_DIRECTORY} ...' >&2
+    case \`uname -s\` in
+        OpenBSD|FreeBSD) sudo umount '${HREMOTE_DIRECTORY}' 2>/dev/null || true;;
+        *)               fusermount -u '${HREMOTE_DIRECTORY}' 2>/dev/null || true;;
+    esac"
+}
+hremote_mount() {
+    ## Find a `sftp-server`. [,large_read]
+    if test -f /usr/lib/ssh/sftp-server;then
+        local sftp_executable=/usr/lib/ssh/sftp-server
+    elif test -f /usr/lib/openssh/sftp-server;then
+        local sftp_executable=/usr/lib/openssh/sftp-server
+    elif test -f /usr/libexec/openssh/sftp-server;then
+        local sftp_executable=/usr/libexec/openssh/sftp-server
+    else
+        hutil fatal "Localhost system not implemented or SFTP-SERVER not found."
+    fi
+    hutil errif "Can't find dpipe executable" test ! -n "`which dpipe`"
+    local opts="slave,reconnect,allow_other,cache=yes,cache_timeout=60"
+    dpipe                              \
+          "${sftp_executable}"         \
+          =                            \
+          ssh                          \
+          -o PasswordAuthentication=no \
+          -o ServerAliveInterval=15    \
+          -o ServerAliveCountMax=3     \
+          "${HREMOTE_SERVER}" "
+          if test ! -f '${HREMOTE_DIRECTORY}/bin/sh';then
+              echo 'hremote: Mounting ${HREMOTE_DIRECTORY} ...' >&2
+              mkdir -p '${HREMOTE_DIRECTORY}'
+              case \`uname -s\` in
+                 OpenBSD|FreeBSD) sudo sshfs :/ ${HREMOTE_DIRECTORY} -o ${opts},uid=\`id -u\`,gid=\`id -g\` ;;
+                 *)               sshfs :/ ${HREMOTE_DIRECTORY} -o ${opts}                            ;;
+              esac
+              
+          fi" &
+    if test @"`basename "$0"`" = @"hremote";then
+        sleep 1
+    fi
+}
+## ---------------------------------------------------------------------------
+hremote_source_file() {
+    echo 'workdir="`pwd`"'
+    echo "orig_home='${HOME}'"
+    for d in `hprofile -l`;do
+        if test -f "${d}/.profile.sh";then
+            local d="${HREMOTE_DIRECTORY}${d}"
+            echo "if test -f ${d}/.profile.sh;then"
+            echo "    cd '${d}'"
+            echo "    if . ${d}/.profile.sh;then"
+            echo "        test -n \"\${cmd}\" || echo 'Loaded ${d}' >&2"
+            echo "    else"
+            echo "        echo 'Failed loading ${d}' >&2"
+            echo "    fi"
+            echo '    cd $workdir'
+            echo 'fi'
+        fi
+    done
+}
+hremote_shell() {
+    local ps1='\033[1;33m[SSH \u@\h \w]\033[0m\n$ '
+    ssh -o LogLevel=QUIET -t "${HREMOTE_SERVER}" "
+        cmd=\"$*\"
+        `hremote_source_file`
+        if test -d ${HREMOTE_DIRECTORY}/`pwd`;then
+            cd ${HREMOTE_DIRECTORY}/`pwd`
+        fi
+        test -n \"\${cmd}\" || echo \"Running a shell in ${HREMOTE_SERVER}\" >&2
+        if test -n \"\${cmd}\";then
+            exec \$cmd
+        elif which zsh >/dev/null 2>&1;then
+            export PROMPT='%F{red}%1~%f%# '
+            exec zsh
+        elif test /bin/bash = \"\$SHELL\";then
+            export PS1='${ps1}'
+            exec /bin/bash --noprofile --norc
+        else
+            exec \"\$SHELL\"
+        fi"
+    
+}
+
+
+
+
+
+## ---------------------------------------------------------------------------
+hremote_calc_variables
+if test @"`basename "$0"`" = @"hremote";then
+   if test -n "$1";then
+      hremote "$@"
+   else
+      hutil help
+   fi
+fi
+
