@@ -1,3 +1,5 @@
-HREADME=-d
-HLICENSE_GEN_TXT=mit-openvirtus
-HLICENSE_HEADERS=mit-openvirtus
+auto() {
+    create -vf mit-openvirtus/LICENSE
+    create -vf mit-openvirtus/HEADERS
+    create -vf mit-openvirtus/README.md
+}

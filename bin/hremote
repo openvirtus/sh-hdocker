@@ -124,11 +124,7 @@ hremote_source_file() {
             local d="${HREMOTE_DIRECTORY}${d}"
             echo "if test -f ${d}/.profile.sh;then"
             echo "    cd '${d}'"
-            echo "    if . ${d}/.profile.sh;then"
-            echo "        test -n \"\${cmd}\" || echo 'Loaded ${d}' >&2"
-            echo "    else"
-            echo "        echo 'Failed loading ${d}' >&2"
-            echo "    fi"
+            echo "    . ${d}/.profile.sh"
             echo '    cd $workdir'
             echo 'fi'
         fi

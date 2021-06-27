@@ -38,7 +38,10 @@
 . hdock-ls
 hdock_sh() {
     ## Parse command line arguments.
-    local OPTIND optopt= ops= do_chdir=y user= container= args="-it" psh=""
+    local OPTIND optopt= ops= do_chdir=y user= container= args="-i" psh=""
+    if test -t 0;then
+        local args="${args} -t"
+    fi
     while getopts "vqu:s:V" optopt;do # OPTARG
         local ops="${ops}${optopt}"
         case $optopt in
