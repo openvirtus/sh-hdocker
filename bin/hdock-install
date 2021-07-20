@@ -41,8 +41,7 @@ hdock_install() {
     esac
     case "${1}" in
         -*i*) hdock_install_extract
-              hdock_install_wrappers
-              hdock_install_service;;
+              hdock_install_wrappers;;
     esac
     case "${1}" in
         -*r*) docker system prune -a -f;;
@@ -106,34 +105,6 @@ export PATH="${HDOCK_DIRECTORY}/bin:\${PATH}"
 export DOCKER_BUILDKIT=1
 exec '${HDOCK_DIRECTORY}/bin/dockerd' "\$@"
 EOF
-}
-hdock_install_service() {
-    if test -d /etc/systemd/system;then
-        ## Create service.
-        echo "[+] Creating /etc/systemd/system/${HDOCK_SERVICE}.service ..."
-        sudo mkdir -p /etc/systemd/system
-        sudo sh -c "cat > /etc/systemd/system/${HDOCK_SERVICE}.service" <<EOF
-[Unit]
-Description=Docker daemon
-After=network.target
-
-[Service]
-Type=simple
-ExecStart=${HDOCK_SERVER}
-Restart=on-failure
-RestartSec=42s
-
-[Install]
-WantedBy=multi-user.target
-EOF
-        ## Enable service.
-        hdock_vrun sudo systemctl daemon-reload
-        hdock_vrun sudo systemctl restart "${HDOCK_SERVICE}"
-        sleep 2
-        hdock_vrun sudo systemctl status  "${HDOCK_SERVICE}" | cat
-        hdock_vrun sudo systemctl enable  "${HDOCK_SERVICE}"
-        sudo systemctl disable docker 2>/dev/null || true
-    fi
 }
 hdock_vrun() {
     echo "[+] $*"
