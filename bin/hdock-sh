@@ -98,8 +98,9 @@ hdock_sh() {
         local psh="
 cmd=1
 ${psh}
+set -e
 ${*}"
-        hdock_sh_vrun docker exec ${args} "${container}" "${HDOCK_SHELL}" -ec "${psh}"
+        hdock_sh_vrun docker exec ${args} "${container}" "${HDOCK_SHELL}" -c "${psh}"
     else
         local psh="${psh}
 if test /bin/bash = \"${HDOCK_SHELL}\";then

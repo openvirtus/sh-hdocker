@@ -27,7 +27,7 @@
 #h: Usage: $0 [OPTS...] [USER@HOST]
 #h:
 #h: This script helps mounting the local host's filesystem in a server. This
-#h: enables the system administrator to write scripts easily. [Support hcfg]
+#h: enables the system administrator to write scripts easily.
 #h:
 #h: (i) Maybe you want to uncomment `user_allow_other` in /etc/fuse.conf in
 #h:     the server.
@@ -44,8 +44,6 @@
 #h: -s : Open shell in the server.
 #::
 #a: [ADMIN] Mount scripts in your local machine into the server using sshfs.
-. hutil
-. hcfg
 hremote() {
     ## Parse command line arguments.
     local OPTIND optopt= ops=
@@ -90,9 +88,13 @@ hremote_mount() {
     elif test -f /usr/libexec/openssh/sftp-server;then
         local sftp_executable=/usr/libexec/openssh/sftp-server
     else
-        hutil fatal "Localhost system not implemented or SFTP-SERVER not found."
+        echo "${LOGNAME}: error: Localhost system not implemented or SFTP-SERVER not found." >&2
+        return 1
     fi
-    hutil errif "Can't find dpipe executable" test ! -n "`which dpipe`"
+    if test ! -n "`which dpipe`";then
+        echo "${LOGNAME}: error: Can't find dpipe executable." >&2
+        return 1
+    fi
     local opts="slave,reconnect,allow_other,cache=yes,cache_timeout=60"
     dpipe                              \
           "${sftp_executable}"         \
@@ -159,11 +161,14 @@ hremote_shell() {
 
 ## ---------------------------------------------------------------------------
 hremote_calc_variables
-if test @"`basename "$0"`" = @"hremote";then
-   if test -n "$1";then
-      hremote "$@"
-   else
-      hutil help
-   fi
+LOGNAME="`basename "$0"`"
+if test @"${LOGNAME}" = @"hremote";then
+    if test -n "$1";then
+        hremote "$@"
+    else
+        sed -n 's/^ *#h: \{0,1\}//p' "$0" | sed "s|\\\$0|`basename $0`|g"
+        echo ""
+        sed -n 's/^ *#l: \{0,1\}//p' "$0"
+    fi
 fi
 
